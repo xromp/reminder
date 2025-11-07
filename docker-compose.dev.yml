@@ -1,0 +1,96 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: birthday-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-birthday_db}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    networks:
+      - birthday-network-dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis (for Bull queue)
+  redis:
+    image: redis:7-alpine
+    container_name: birthday-redis-dev
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6380}:6379"
+    networks:
+      - birthday-network-dev
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # NestJS Application - Development with hot reload
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      target: development
+    container_name: birthday-app-dev
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      NODE_ENV: development
+      PORT: ${PORT:-3000}
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-birthday_db}?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      HOOKBIN_URL: ${HOOKBIN_URL}
+      SCHEDULER_ENABLED: ${SCHEDULER_ENABLED:-false}
+      WORKER_ENABLED: ${WORKER_ENABLED:-false}
+      RECOVERY_ENABLED: ${RECOVERY_ENABLED:-false}
+    ports:
+      - "${PORT:-3000}:3000"
+      - "9229:9229" # Debug port
+    volumes:
+      - ./src:/app/src
+      - ./prisma:/app/prisma
+      - /app/node_modules
+    networks:
+      - birthday-network-dev
+    command: yarn start:dev
+
+  # Prisma Studio (Database GUI)
+  prisma-studio:
+    image: node:20-alpine
+    container_name: birthday-prisma-studio-dev
+    working_dir: /app
+    command: sh -c "yarn install && yarn prisma:studio"
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-birthday_db}?schema=public
+    ports:
+      - "5555:5555"
+    volumes:
+      - ./:/app
+      - /app/node_modules
+    networks:
+      - birthday-network-dev
+
+volumes:
+  postgres_dev_data:
+    driver: local
+
+networks:
+  birthday-network-dev:
+    driver: bridge

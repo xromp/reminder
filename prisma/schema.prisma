@@ -1,0 +1,159 @@
+// Birthday Notification System - Production Schema
+// Incorporates timezone support, soft deletes, and operational metadata
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Users table with soft delete support and IANA timezone
+model User {
+  id                String             @id @default(uuid()) @db.Uuid
+  firstName         String             @map("first_name") @db.VarChar(255)
+  lastName          String             @map("last_name") @db.VarChar(255)
+  birthday          DateTime           @db.Date
+  timezone          String             @db.VarChar(50) // IANA timezone (e.g., America/New_York)
+
+  // Computed columns for efficient birthday lookups
+  birthdayMonth     Int                @map("birthday_month") @db.SmallInt
+  birthdayDay       Int                @map("birthday_day") @db.SmallInt
+
+  // Soft delete support
+  deletedAt         DateTime?          @map("deleted_at")
+
+  // Audit timestamps
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+
+  // Relations
+  birthdayMessages  BirthdayMessage[]
+  recurringEvents   RecurringEvent[]
+
+  @@index([birthdayMonth, birthdayDay, timezone], name: "idx_users_birthday_lookup")
+  @@index([deletedAt], name: "idx_users_active")
+  @@map("users")
+}
+
+// Recurring events for extensibility (birthdays, anniversaries, etc.)
+model RecurringEvent {
+  id                String              @id @default(uuid()) @db.Uuid
+  userId            String              @map("user_id") @db.Uuid
+  type              EventType
+  eventDate         DateTime            @map("event_date") @db.Date // MM-DD for recurring
+  notificationTime  String              @map("notification_time") @db.VarChar(8) // HH:MM:SS
+  enabled           Boolean             @default(true)
+
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notifications     ScheduledNotification[]
+
+  @@index([type, eventDate, enabled], name: "idx_recurring_events_lookup")
+  @@map("recurring_events")
+}
+
+// Birthday messages with retry logic and metadata
+model BirthdayMessage {
+  id                     String   @id @default(uuid()) @db.Uuid
+  userId                 String   @map("user_id") @db.Uuid
+  scheduledFor           DateTime @map("scheduled_for")
+  status                 MessageStatus @default(PENDING)
+  deliveredAt            DateTime? @map("delivered_at")
+
+  // Retry and error tracking
+  retryCount             Int      @default(0) @map("retry_count") @db.SmallInt
+  errorMessage           String?  @map("error_message") @db.Text
+  webhookResponseCode    Int?     @map("webhook_response_code") @db.SmallInt
+  processingDurationMs   Int?     @map("processing_duration_ms")
+  workerInstanceId       String?  @map("worker_instance_id") @db.VarChar(100)
+
+  // User version for stale message detection
+  userSnapshot           Json?    @map("user_snapshot") @db.JsonB
+
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Prevent duplicates: one message per user per scheduled time
+  @@unique([userId, scheduledFor], name: "unique_user_scheduled_time")
+  @@index([status, scheduledFor], name: "idx_birthday_messages_pending_scheduled")
+  @@map("birthday_messages")
+}
+
+// Generic scheduled notifications for extensibility
+model ScheduledNotification {
+  id                     String            @id @default(uuid()) @db.Uuid
+  eventId                String            @map("event_id") @db.Uuid
+  scheduledFor           DateTime          @map("scheduled_for")
+  status                 MessageStatus     @default(PENDING)
+  deliveredAt            DateTime?         @map("delivered_at")
+
+  // Retry and error tracking
+  retryCount             Int               @default(0) @map("retry_count") @db.SmallInt
+  errorMessage           String?           @map("error_message") @db.Text
+  webhookResponseCode    Int?              @map("webhook_response_code") @db.SmallInt
+  processingDurationMs   Int?              @map("processing_duration_ms")
+  workerInstanceId       String?           @map("worker_instance_id") @db.VarChar(100)
+
+  // Event-specific metadata
+  metadata               Json?             @db.JsonB
+
+  createdAt              DateTime          @default(now()) @map("created_at")
+  updatedAt              DateTime          @updatedAt @map("updated_at")
+
+  event                  RecurringEvent    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, scheduledFor], name: "unique_event_scheduled_time")
+  @@index([status, scheduledFor], name: "idx_notifications_pending_scheduled")
+  @@map("scheduled_notifications")
+}
+
+// Delivery attempt log for audit trail
+model DeliveryAttempt {
+  id                String    @id @default(uuid()) @db.Uuid
+  messageId         String    @map("message_id") @db.Uuid
+  attemptNumber     Int       @map("attempt_number") @db.SmallInt
+  status            AttemptStatus
+  httpStatusCode    Int?      @map("http_status_code") @db.SmallInt
+  errorMessage      String?   @map("error_message") @db.Text
+  responseBody      String?   @map("response_body") @db.Text
+  durationMs        Int       @map("duration_ms")
+
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  @@index([messageId, attemptNumber], name: "idx_delivery_attempts_message")
+  @@map("delivery_attempts")
+}
+
+// Enums
+enum EventType {
+  BIRTHDAY
+  ANNIVERSARY
+  SUBSCRIPTION_RENEWAL
+  CUSTOM
+
+  @@map("event_type")
+}
+
+enum MessageStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+
+  @@map("message_status")
+}
+
+enum AttemptStatus {
+  SUCCESS
+  FAILED
+  TIMEOUT
+
+  @@map("attempt_status")
+}

@@ -1,0 +1,114 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: birthday-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-birthday_db}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - birthday-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis (for Bull queue)
+  redis:
+    image: redis:7-alpine
+    container_name: birthday-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - birthday-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # NestJS Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: birthday-app
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: ${PORT:-3000}
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-birthday_db}?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      SQS_QUEUE_URL: ${SQS_QUEUE_URL}
+      SQS_DLQ_URL: ${SQS_DLQ_URL}
+      HOOKBIN_URL: ${HOOKBIN_URL}
+      SCHEDULER_ENABLED: ${SCHEDULER_ENABLED:-false}
+      WORKER_ENABLED: ${WORKER_ENABLED:-false}
+      RECOVERY_ENABLED: ${RECOVERY_ENABLED:-false}
+      MAX_RETRIES: ${MAX_RETRIES:-3}
+      RETRY_DELAY_SECONDS: ${RETRY_DELAY_SECONDS:-60,300,900}
+      GRACE_PERIOD_MINUTES: ${GRACE_PERIOD_MINUTES:-120}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-10}
+      CLOUDWATCH_NAMESPACE: ${CLOUDWATCH_NAMESPACE:-BirthdayNotifications}
+    ports:
+      - "${PORT:-3000}:3000"
+    networks:
+      - birthday-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Prisma Studio (Database GUI) - Development only
+  prisma-studio:
+    image: node:20-alpine
+    container_name: birthday-prisma-studio
+    working_dir: /app
+    command: sh -c "yarn install && yarn prisma:studio"
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-birthday_db}?schema=public
+    ports:
+      - "5555:5555"
+    volumes:
+      - ./:/app
+      - /app/node_modules
+    networks:
+      - birthday-network
+    profiles:
+      - development
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  birthday-network:
+    driver: bridge
