@@ -10,6 +10,7 @@ export default () => ({
     region: process.env.AWS_REGION || 'us-east-1',
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    endpoint: process.env.AWS_ENDPOINT_URL,
   },
 
   sqs: {
@@ -28,6 +29,8 @@ export default () => ({
   worker: {
     enabled: process.env.WORKER_ENABLED === 'true',
     concurrency: parseInt(process.env.WORKER_CONCURRENCY || '10', 10),
+    pollInterval: parseInt(process.env.WORKER_POLL_INTERVAL || '5000', 10),
+    visibilityTimeout: parseInt(process.env.WORKER_VISIBILITY_TIMEOUT || '30', 10),
   },
 
   recovery: {
@@ -44,5 +47,15 @@ export default () => ({
 
   cloudwatch: {
     namespace: process.env.CLOUDWATCH_NAMESPACE || 'BirthdayNotifications',
+  },
+
+  smtp: {
+    host: process.env.SMTP_HOST || 'localhost',
+    port: parseInt(process.env.SMTP_PORT || '1025', 10),
+    secure: process.env.SMTP_SECURE === 'true',
+    from: {
+      email: process.env.SMTP_FROM_EMAIL || 'noreply@reminder.local',
+      name: process.env.SMTP_FROM_NAME || 'Reminder App',
+    },
   },
 });

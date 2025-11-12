@@ -4,10 +4,11 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { BullModule } from '@nestjs/bull';
 import { DatabaseModule } from './database/database.module';
 import { UserModule } from './modules/user/user.module';
-import { BirthdayModule } from './modules/birthday/birthday.module';
+import { EventsModule } from './modules/events/events.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { HealthModule } from './modules/health/health.module';
 import { AwsModule } from './modules/aws/aws.module';
+import { JobsModule } from './modules/jobs/jobs.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -35,9 +36,12 @@ import configuration from './config/configuration';
     // AWS services
     AwsModule,
 
+    // Jobs infrastructure
+    JobsModule,
+
     // Feature modules
     UserModule,
-    BirthdayModule,
+    EventsModule,
     NotificationModule,
     HealthModule,
   ],

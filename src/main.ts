@@ -6,7 +6,7 @@ import { LoggerService } from './common/utils/logger.service';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
-    logger: new LoggerService(),
+    logger: console,
   });
 
   const configService = app.get(ConfigService);
@@ -34,4 +34,7 @@ async function bootstrap() {
   });
 }
 
-bootstrap();
+bootstrap().catch((error) => {
+  console.error('Application bootstrap failed:', error);
+  process.exit(1);
+});
