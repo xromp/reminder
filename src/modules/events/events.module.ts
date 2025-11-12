@@ -1,7 +1,9 @@
 import { Module, OnModuleInit } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { EventSchedulerService } from './event-scheduler.service';
 import { EventRecoveryService } from './recovery/event-recovery.service';
+import { EventsController } from './events.controller';
 import { AwsModule } from '../aws/aws.module';
 import { CommonModule } from '../../common/common.module';
 import { NotificationModule } from '../notification/notification.module';
@@ -25,7 +27,14 @@ import { JobType } from '../jobs/enums/job-type.enum';
  * to their corresponding processor implementations.
  */
 @Module({
-  imports: [ConfigModule, AwsModule, CommonModule, NotificationModule],
+  imports: [
+    ConfigModule,
+    ScheduleModule.forRoot(),
+    AwsModule,
+    CommonModule,
+    NotificationModule,
+  ],
+  controllers: [EventsController],
   providers: [
     EventSchedulerService,
     EventRecoveryService,

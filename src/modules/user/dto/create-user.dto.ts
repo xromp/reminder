@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsDateString, MinLength, MaxLength } from 'class-validator';
+import { IsString, IsNotEmpty, IsISO8601, MinLength, MaxLength } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { TimezoneUtil } from '../../../common/utils/timezone.util';
 
@@ -15,9 +15,8 @@ export class CreateUserDto {
   @MaxLength(255)
   lastName: string;
 
-  @IsDateString()
-  @Type(() => Date)
-  birthday: Date;
+  @IsISO8601({ strict: false })
+  birthday: string;
 
   @IsString()
   @IsNotEmpty()

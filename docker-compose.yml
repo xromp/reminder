@@ -48,6 +48,7 @@ services:
       SERVICES: sqs,cloudwatch
       DEBUG: ${LOCALSTACK_DEBUG:-0}
       DOCKER_HOST: unix:///var/run/docker.sock
+      LOCALSTACK_HOSTNAME: localstack
     ports:
       - "4566:4566"
     volumes:

@@ -18,8 +18,12 @@ awslocal sqs create-queue \
   --attributes FifoQueue=true,ContentBasedDeduplication=true \
   --region us-east-1
 
-DLQ_URL=$(awslocal sqs get-queue-url --queue-name "$DLQ_NAME" --region us-east-1 --query 'QueueUrl' --output text)
-DLQ_ARN=$(awslocal sqs get-queue-attributes --queue-url "$DLQ_URL" --attribute-names QueueArn --region us-east-1 --query 'Attributes.QueueArn' --output text)
+# Get ARN using the LocalStack-returned URL (needed for queue creation)
+DLQ_URL_RAW=$(awslocal sqs get-queue-url --queue-name "$DLQ_NAME" --region us-east-1 --query 'QueueUrl' --output text)
+DLQ_ARN=$(awslocal sqs get-queue-attributes --queue-url "$DLQ_URL_RAW" --attribute-names QueueArn --region us-east-1 --query 'Attributes.QueueArn' --output text)
+
+# Construct Docker-internal URL for use by app containers
+DLQ_URL="http://localstack:4566/000000000000/$DLQ_NAME"
 
 echo "✅ DLQ created: $DLQ_URL"
 echo "   ARN: $DLQ_ARN"
@@ -35,7 +39,8 @@ awslocal sqs create-queue \
   }" \
   --region us-east-1
 
-QUEUE_URL=$(awslocal sqs get-queue-url --queue-name "$QUEUE_NAME" --region us-east-1 --query 'QueueUrl' --output text)
+# Construct Docker-internal URL for use by app containers
+QUEUE_URL="http://localstack:4566/000000000000/$QUEUE_NAME"
 
 echo "✅ Main queue created: $QUEUE_URL"
 

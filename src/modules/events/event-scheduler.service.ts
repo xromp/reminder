@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../database/prisma.service';
 import { LoggerService } from '../../common/utils/logger.service';
 import { SqsService } from '../aws/sqs.service';
@@ -27,7 +28,7 @@ import { Prisma, EventType } from '@prisma/client';
  * - Transport-agnostic queueing (SQS has no business logic)
  */
 @Injectable()
-export class EventSchedulerService {
+export class EventSchedulerService implements OnModuleInit {
   private readonly enabled: boolean;
 
   constructor(
@@ -47,14 +48,33 @@ export class EventSchedulerService {
   }
 
   /**
-   * Schedule all upcoming RecurringEvent occurrences
+   * Run scheduler once on startup to catch any immediate notifications
+   */
+  async onModuleInit() {
+    if (this.enabled) {
+      this.logger.log('Running initial event scheduling on startup');
+      try {
+        const scheduled = await this.scheduleUpcomingOccurrences();
+        this.logger.log(`Initial scheduling complete: ${scheduled} events scheduled`);
+      } catch (error) {
+        this.logger.error('Initial scheduling failed', error.stack);
+      }
+    }
+  }
+
+  /**
+   * Schedule all upcoming RecurringEvent occurrences (CRON Job)
    * 
    * Finds all enabled RecurringEvents, computes their next occurrence,
    * and schedules them by creating ScheduledNotifications and publishing
    * JobEnvelopes to SQS.
    * 
+   * Runs automatically every hour via CRON job.
+   * Can also be triggered manually via admin endpoint.
+   * 
    * @returns Number of occurrences scheduled
    */
+  @Cron(CronExpression.EVERY_HOUR)
   async scheduleUpcomingOccurrences(): Promise<number> {
     if (!this.enabled) return 0;
 

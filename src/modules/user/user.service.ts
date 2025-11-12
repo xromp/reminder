@@ -3,7 +3,8 @@ import { PrismaService } from '../../database/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { LoggerService } from '../../common/utils/logger.service';
-import { getMonth, getDate } from 'date-fns';
+import { getMonth, getDate, setYear } from 'date-fns';
+import { EventType } from '@prisma/client';
 
 @Injectable()
 export class UserService {
@@ -16,28 +17,48 @@ export class UserService {
     const { firstName, lastName, birthday, timezone } = createUserDto;
 
     // Extract birthday month and day for efficient indexing
-    const birthdayMonth = getMonth(new Date(birthday)) + 1; // Months are 0-indexed
-    const birthdayDay = getDate(new Date(birthday));
+    const birthdayDate = new Date(birthday);
+    const birthdayMonth = getMonth(birthdayDate) + 1; // Months are 0-indexed
+    const birthdayDay = getDate(birthdayDate);
 
-    const user = await this.prisma.user.create({
-      data: {
-        firstName,
-        lastName,
-        birthday: new Date(birthday),
+    // Create user and recurring event in a transaction
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Create user
+      const user = await tx.user.create({
+        data: {
+          firstName,
+          lastName,
+          birthday: birthdayDate,
+          timezone,
+          birthdayMonth,
+          birthdayDay,
+        },
+      });
+
+      // Create RecurringEvent for birthday (using epoch year 2000)
+      const eventDate = setYear(birthdayDate, 2000);
+      const recurringEvent = await tx.recurringEvent.create({
+        data: {
+          userId: user.id,
+          type: EventType.BIRTHDAY,
+          eventDate,
+          notificationTime: '09:00:00', // Default notification time
+          enabled: true,
+        },
+      });
+
+      this.logger.log('User and recurring event created successfully', {
+        userId: user.id,
+        recurringEventId: recurringEvent.id,
         timezone,
         birthdayMonth,
         birthdayDay,
-      },
+      });
+
+      return user;
     });
 
-    this.logger.log('User created successfully', {
-      userId: user.id,
-      timezone,
-      birthdayMonth,
-      birthdayDay,
-    });
-
-    return user;
+    return result;
   }
 
   async findAll(includeDeleted = false) {
