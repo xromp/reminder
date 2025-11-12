@@ -3,3 +3,19 @@ node_modules
 .env
 
 /generated/prisma
+
+# Build output
+dist/
+
+# IDE and AI assistant files
+.bmad-ephemeral/
+.bmad/
+.claude/
+.cursor/
+CLAUDE.md
+
+# Documentation (generated)
+docs/
+
+# Lock files (using yarn)
+package-lock.json

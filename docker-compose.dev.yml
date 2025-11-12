@@ -4,18 +4,18 @@ services:
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
-    container_name: birthday-postgres-dev
+    container_name: reminder-postgres-dev
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
-      POSTGRES_DB: ${POSTGRES_DB:-birthday_db}
+      POSTGRES_DB: ${POSTGRES_DB:-reminder_db}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
     networks:
-      - birthday-network-dev
+      - reminder-network-dev
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -25,12 +25,12 @@ services:
   # Redis (for Bull queue)
   redis:
     image: redis:7-alpine
-    container_name: birthday-redis-dev
+    container_name: reminder-redis-dev
     restart: unless-stopped
     ports:
       - "${REDIS_PORT:-6380}:6379"
     networks:
-      - birthday-network-dev
+      - reminder-network-dev
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -43,7 +43,7 @@ services:
       context: .
       dockerfile: Dockerfile.dev
       target: development
-    container_name: birthday-app-dev
+    container_name: reminder-app-dev
     restart: unless-stopped
     depends_on:
       - postgres
@@ -51,7 +51,7 @@ services:
     environment:
       NODE_ENV: development
       PORT: ${PORT:-3000}
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-birthday_db}?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-reminder_db}?schema=public
       REDIS_HOST: redis
       REDIS_PORT: 6379
       HOOKBIN_URL: ${HOOKBIN_URL}
@@ -66,31 +66,31 @@ services:
       - ./prisma:/app/prisma
       - /app/node_modules
     networks:
-      - birthday-network-dev
+      - reminder-network-dev
     command: yarn start:dev
 
   # Prisma Studio (Database GUI)
   prisma-studio:
     image: node:20-alpine
-    container_name: birthday-prisma-studio-dev
+    container_name: reminder-prisma-studio-dev
     working_dir: /app
     command: sh -c "yarn install && yarn prisma:studio"
     depends_on:
       - postgres
     environment:
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-birthday_db}?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-reminder_db}?schema=public
     ports:
       - "5555:5555"
     volumes:
       - ./:/app
       - /app/node_modules
     networks:
-      - birthday-network-dev
+      - reminder-network-dev
 
 volumes:
   postgres_dev_data:
     driver: local
 
 networks:
-  birthday-network-dev:
+  reminder-network-dev:
     driver: bridge
