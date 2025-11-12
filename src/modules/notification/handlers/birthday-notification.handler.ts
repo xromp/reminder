@@ -1,13 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { User } from '@prisma/client';
+import { User, RecurringEvent } from '@prisma/client';
 import { NotificationHandler } from '../interfaces/notification-handler.interface';
 
 @Injectable()
 export class BirthdayNotificationHandler implements NotificationHandler {
   constructor(private readonly configService: ConfigService) {}
 
-  getMessageTemplate(user: User): string {
+  getMessageTemplate(
+    user: User,
+    event?: RecurringEvent,
+    scheduledFor?: Date,
+  ): string {
     return `Hey, ${user.firstName} ${user.lastName} it's your birthday`;
   }
 

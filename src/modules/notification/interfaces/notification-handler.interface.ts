@@ -1,4 +1,4 @@
-import { User } from '@prisma/client';
+import { User, RecurringEvent } from '@prisma/client';
 
 /**
  * Strategy pattern interface for different notification types
@@ -7,8 +7,12 @@ import { User } from '@prisma/client';
 export interface NotificationHandler {
   /**
    * Generate the message template for this notification type
+   * 
+   * @param user - User receiving notification
+   * @param event - Optional RecurringEvent for context (e.g., originYear for anniversaries)
+   * @param scheduledFor - Optional scheduled date for year calculations
    */
-  getMessageTemplate(user: User): string;
+  getMessageTemplate(user: User, event?: RecurringEvent, scheduledFor?: Date): string;
 
   /**
    * Get the webhook URL for delivery
