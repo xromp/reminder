@@ -1,22 +1,20 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
-    container_name: birthday-postgres
+    container_name: reminder-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
-      POSTGRES_DB: ${POSTGRES_DB:-birthday_db}
+      POSTGRES_DB: ${POSTGRES_DB:-reminder_db}
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - birthday-network
+      - reminder-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -26,7 +24,7 @@ services:
   # Redis (for Bull queue)
   redis:
     image: redis:7-alpine
-    container_name: birthday-redis
+    container_name: reminder-redis
     restart: unless-stopped
     command: redis-server --appendonly yes
     ports:
@@ -34,12 +32,36 @@ services:
     volumes:
       - redis_data:/data
     networks:
-      - birthday-network
+      - reminder-network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
+
+  # LocalStack (Local AWS Services) - Development only
+  localstack:
+    image: localstack/localstack:latest
+    container_name: reminder-localstack
+    restart: unless-stopped
+    environment:
+      SERVICES: sqs,cloudwatch
+      DEBUG: ${LOCALSTACK_DEBUG:-0}
+      DOCKER_HOST: unix:///var/run/docker.sock
+    ports:
+      - "4566:4566"
+    volumes:
+      - ./scripts/localstack-init.sh:/etc/localstack/init/ready.d/init-aws.sh
+      - localstack_data:/var/lib/localstack
+    networks:
+      - reminder-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - development
 
   # NestJS Application
   app:
@@ -47,7 +69,11 @@ services:
       context: .
       dockerfile: Dockerfile
       target: production
-    container_name: birthday-app
+      network: host
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    container_name: reminder-app
     restart: unless-stopped
     depends_on:
       - postgres
@@ -55,12 +81,13 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: ${PORT:-3000}
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-birthday_db}?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-reminder_db}?schema=public
       REDIS_HOST: redis
       REDIS_PORT: 6379
       AWS_REGION: ${AWS_REGION:-us-east-1}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_ENDPOINT_URL: ${AWS_ENDPOINT_URL}
       SQS_QUEUE_URL: ${SQS_QUEUE_URL}
       SQS_DLQ_URL: ${SQS_DLQ_URL}
       HOOKBIN_URL: ${HOOKBIN_URL}
@@ -71,11 +98,16 @@ services:
       RETRY_DELAY_SECONDS: ${RETRY_DELAY_SECONDS:-60,300,900}
       GRACE_PERIOD_MINUTES: ${GRACE_PERIOD_MINUTES:-120}
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-10}
-      CLOUDWATCH_NAMESPACE: ${CLOUDWATCH_NAMESPACE:-BirthdayNotifications}
+      CLOUDWATCH_NAMESPACE: ${CLOUDWATCH_NAMESPACE:-ReminderNotifications}
+      SMTP_HOST: ${SMTP_HOST:-mailhog}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-noreply@reminder.local}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Reminder App}
     ports:
       - "${PORT:-3000}:3000"
     networks:
-      - birthday-network
+      - reminder-network
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1"]
       interval: 30s
@@ -83,23 +115,36 @@ services:
       retries: 3
       start_period: 40s
 
+  # MailHog (SMTP server for development)
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: reminder-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"  # SMTP server
+      - "8025:8025"  # Web UI
+    networks:
+      - reminder-network
+    profiles:
+      - development
+
   # Prisma Studio (Database GUI) - Development only
   prisma-studio:
     image: node:20-alpine
-    container_name: birthday-prisma-studio
+    container_name: reminder-prisma-studio
     working_dir: /app
     command: sh -c "yarn install && yarn prisma:studio"
     depends_on:
       - postgres
     environment:
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-birthday_db}?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-reminder_db}?schema=public
     ports:
       - "5555:5555"
     volumes:
       - ./:/app
       - /app/node_modules
     networks:
-      - birthday-network
+      - reminder-network
     profiles:
       - development
 
@@ -108,7 +153,9 @@ volumes:
     driver: local
   redis_data:
     driver: local
+  localstack_data:
+    driver: local
 
 networks:
-  birthday-network:
+  reminder-network:
     driver: bridge

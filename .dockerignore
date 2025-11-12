@@ -39,10 +39,6 @@ docker-compose.yml
 
 # Documentation
 *.md
-claudedocs/
-
-# Prisma
-prisma/migrations/
 
 # Logs
 logs/
@@ -51,5 +47,4 @@ logs/
 # Misc
 .prettierrc
 .eslintrc.js
-tsconfig.json
 jest.config.js

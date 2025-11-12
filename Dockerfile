@@ -14,7 +14,8 @@ RUN yarn install --frozen-lockfile
 # Copy source code
 COPY . .
 
-# Generate Prisma client
+# Generate Prisma client (dummy DATABASE_URL for build stage)
+ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy?schema=public"
 RUN yarn prisma:generate
 
 # Build application
@@ -44,9 +45,12 @@ RUN addgroup -g 1001 -S nodejs && \
 
 # Copy built application
 COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
-COPY --from=builder --chown=nestjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=dependencies --chown=nestjs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=nestjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder --chown=nestjs:nodejs /app/node_modules/@prisma/client ./node_modules/@prisma/client
 COPY --chown=nestjs:nodejs package.json ./
+COPY --from=builder --chown=nestjs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nestjs:nodejs /app/prisma.config.ts ./prisma.config.ts
 
 # Switch to non-root user
 USER nestjs
