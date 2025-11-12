@@ -306,12 +306,14 @@ docker-compose --profile development up -d
 # - Main FIFO queue: birthday-notifications.fifo
 # - Dead Letter Queue: birthday-notifications-dlq.fifo
 
-# Configure environment variables in .env:
+# IMPORTANT: Configure environment variables in .env:
 AWS_ENDPOINT_URL=http://localstack:4566
 SQS_QUEUE_URL=http://localstack:4566/000000000000/birthday-notifications.fifo
 SQS_DLQ_URL=http://localstack:4566/000000000000/birthday-notifications-dlq.fifo
 AWS_ACCESS_KEY_ID=test
 AWS_SECRET_ACCESS_KEY=test
+
+# NOTE: Queue names MUST match what LocalStack init script creates
 
 # Verify queues were created
 docker-compose exec localstack awslocal sqs list-queues
