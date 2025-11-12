@@ -172,4 +172,90 @@ export class CloudWatchService {
       ),
     ]);
   }
+
+  /**
+   * Record job processing success
+   */
+  async recordJobSuccess(jobType: string, durationMs: number): Promise<void> {
+    await Promise.all([
+      this.recordMetric(
+        'JobProcessingSuccess',
+        1,
+        StandardUnit.Count,
+        { JobType: jobType },
+      ),
+      this.recordMetric(
+        'JobProcessingDuration',
+        durationMs,
+        StandardUnit.Milliseconds,
+        { JobType: jobType },
+      ),
+    ]);
+  }
+
+  /**
+   * Record job processing failure
+   */
+  async recordJobFailure(
+    jobType: string,
+    failureReason: string,
+  ): Promise<void> {
+    await this.recordMetric(
+      'JobProcessingFailure',
+      1,
+      StandardUnit.Count,
+      { JobType: jobType, FailureReason: failureReason },
+    );
+  }
+
+  /**
+   * Record job validation failure
+   */
+  async recordValidationFailure(validationReason: string): Promise<void> {
+    await this.recordMetric(
+      'JobValidationFailure',
+      1,
+      StandardUnit.Count,
+      { ValidationReason: validationReason },
+    );
+  }
+
+  /**
+   * Record unregistered job type
+   */
+  async recordUnregisteredType(jobType: string): Promise<void> {
+    await this.recordMetric(
+      'JobTypeUnregistered',
+      1,
+      StandardUnit.Count,
+      { JobType: jobType },
+    );
+  }
+
+  /**
+   * Record worker batch processing
+   */
+  async recordWorkerBatch(
+    received: number,
+    processed: number,
+    failed: number,
+  ): Promise<void> {
+    await Promise.all([
+      this.recordMetric(
+        'WorkerMessagesReceived',
+        received,
+        StandardUnit.Count,
+      ),
+      this.recordMetric(
+        'WorkerMessagesProcessed',
+        processed,
+        StandardUnit.Count,
+      ),
+      this.recordMetric(
+        'WorkerMessagesFailed',
+        failed,
+        StandardUnit.Count,
+      ),
+    ]);
+  }
 }
