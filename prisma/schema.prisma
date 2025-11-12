@@ -30,7 +30,6 @@ model User {
   updatedAt         DateTime           @updatedAt @map("updated_at")
 
   // Relations
-  birthdayMessages  BirthdayMessage[]
   recurringEvents   RecurringEvent[]
 
   @@index([birthdayMonth, birthdayDay, timezone], name: "idx_users_birthday_lookup")
@@ -43,7 +42,8 @@ model RecurringEvent {
   id                String              @id @default(uuid()) @db.Uuid
   userId            String              @map("user_id") @db.Uuid
   type              EventType
-  eventDate         DateTime            @map("event_date") @db.Date // MM-DD for recurring
+  eventDate         DateTime            @map("event_date") @db.Date // MM-DD for recurring (uses fixed year 2000 convention)
+  originYear        Int?                @map("origin_year") @db.SmallInt // Original year for Nth anniversary calculation
   notificationTime  String              @map("notification_time") @db.VarChar(8) // HH:MM:SS
   enabled           Boolean             @default(true)
 
@@ -57,34 +57,7 @@ model RecurringEvent {
   @@map("recurring_events")
 }
 
-// Birthday messages with retry logic and metadata
-model BirthdayMessage {
-  id                     String   @id @default(uuid()) @db.Uuid
-  userId                 String   @map("user_id") @db.Uuid
-  scheduledFor           DateTime @map("scheduled_for")
-  status                 MessageStatus @default(PENDING)
-  deliveredAt            DateTime? @map("delivered_at")
-
-  // Retry and error tracking
-  retryCount             Int      @default(0) @map("retry_count") @db.SmallInt
-  errorMessage           String?  @map("error_message") @db.Text
-  webhookResponseCode    Int?     @map("webhook_response_code") @db.SmallInt
-  processingDurationMs   Int?     @map("processing_duration_ms")
-  workerInstanceId       String?  @map("worker_instance_id") @db.VarChar(100)
-
-  // User version for stale message detection
-  userSnapshot           Json?    @map("user_snapshot") @db.JsonB
-
-  createdAt              DateTime @default(now()) @map("created_at")
-  updatedAt              DateTime @updatedAt @map("updated_at")
-
-  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // Prevent duplicates: one message per user per scheduled time
-  @@unique([userId, scheduledFor], name: "unique_user_scheduled_time")
-  @@index([status, scheduledFor], name: "idx_birthday_messages_pending_scheduled")
-  @@map("birthday_messages")
-}
+// REMOVED: Legacy BirthdayMessage table - replaced by RecurringEvent + ScheduledNotification
 
 // Generic scheduled notifications for extensibility
 model ScheduledNotification {
@@ -114,22 +87,7 @@ model ScheduledNotification {
   @@map("scheduled_notifications")
 }
 
-// Delivery attempt log for audit trail
-model DeliveryAttempt {
-  id                String    @id @default(uuid()) @db.Uuid
-  messageId         String    @map("message_id") @db.Uuid
-  attemptNumber     Int       @map("attempt_number") @db.SmallInt
-  status            AttemptStatus
-  httpStatusCode    Int?      @map("http_status_code") @db.SmallInt
-  errorMessage      String?   @map("error_message") @db.Text
-  responseBody      String?   @map("response_body") @db.Text
-  durationMs        Int       @map("duration_ms")
-
-  createdAt         DateTime  @default(now()) @map("created_at")
-
-  @@index([messageId, attemptNumber], name: "idx_delivery_attempts_message")
-  @@map("delivery_attempts")
-}
+// REMOVED: Legacy DeliveryAttempt table - used only by legacy BirthdayMessage system
 
 // Enums
 enum EventType {
@@ -150,10 +108,4 @@ enum MessageStatus {
   @@map("message_status")
 }
 
-enum AttemptStatus {
-  SUCCESS
-  FAILED
-  TIMEOUT
-
-  @@map("attempt_status")
-}
+// REMOVED: AttemptStatus enum - used only by legacy DeliveryAttempt table
